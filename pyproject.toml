@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "business-scraper"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+selenium = "^4.16.0"
+webdriver-manager = "^4.0.1"
+bs4 = "^0.0.1"
+pandas = "^2.1.4"
+orb = {git = "https://github.com/Tom3man/orb-weaver.git"}
+html5lib = "^1.1"
+tqdm = "^4.66.4"
+
+
+[tool.poetry.group.dev.dependencies]
+ipykernel = "^6.28.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
