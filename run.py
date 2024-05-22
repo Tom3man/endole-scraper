@@ -11,7 +11,7 @@ from tqdm import tqdm
 from business_scraper.tables.endole import Endole
 from business_scraper.pipeline.format_data import DataFrameFormatter
 from business_scraper.pipeline.extract_data import extract_all_data
-from orb import OrbDriver
+from orb.spinner.core.driver import OrbDriver
 import orb.spinner.utils as orb_utils
 from threading import Lock
 
