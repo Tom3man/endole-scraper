@@ -122,7 +122,7 @@ def main(database_path: Optional[str] = None):
 
     if not database_path:
         # Set database_path using an environment variable if available; otherwise, use REPO_PATH
-        database_path = os.getenv('DATABASE_PATH', REPO_PATH)
+        database_path = f"{os.getenv('DATABASE_PATH', REPO_PATH)}/endole"
 
     with open('postcodes.json', 'r') as file:
         postcode_dict = json.load(file)
