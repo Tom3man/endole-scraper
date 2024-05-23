@@ -1,6 +1,6 @@
 from typing import Dict, List
 
-from business_scraper.common.sqlite_table import SqliteDatabase
+from sqlite_forge.database import SqliteDatabase
 
 
 class Endole(SqliteDatabase):

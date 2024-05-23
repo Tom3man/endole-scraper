@@ -1,19 +1,22 @@
 [tool.poetry]
-name = "business-scraper"
-version = "0.1.0"
-description = ""
-authors = ["Your Name <you@example.com>"]
+name = "endole-scraper"
+version = "1.0.0"
+description = "Repository for scraping the Endole website"
+authors = ["Tom <tomrfreeman3@gmail.com>"]
 readme = "README.md"
+packages = [{include = "endole_scraper"}]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = "^3.12"
 selenium = "^4.16.0"
 webdriver-manager = "^4.0.1"
 bs4 = "^0.0.1"
 pandas = "^2.1.4"
-orb = {git = "https://github.com/Tom3man/orb-weaver.git"}
 html5lib = "^1.1"
 tqdm = "^4.66.4"
+orb = {git = "https://github.com/Tom3man/orb-weaver.git"}
+sqlite_forge = {git = "https://github.com/Tom3man/sqlite-forge.git"}
+click = "^8.1.7"
 
 
 [tool.poetry.group.dev.dependencies]

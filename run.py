@@ -1,20 +1,22 @@
 import concurrent.futures
 import json
 import logging
+import os
 import random
+from threading import Lock
+from typing import List, Optional, Union
 
-from typing import List, Union
+import click
+import orb.spinner.utils as orb_utils
 import pandas as pd
+from orb.spinner.core.driver import OrbDriver
 from selenium.webdriver.chrome.webdriver import WebDriver
 from tqdm import tqdm
 
-from business_scraper.tables.endole import Endole
-from business_scraper.pipeline.format_data import DataFrameFormatter
-from business_scraper.pipeline.extract_data import extract_all_data
-from orb.spinner.core.driver import OrbDriver
-import orb.spinner.utils as orb_utils
-from threading import Lock
-
+from endole_scraper import REPO_PATH
+from endole_scraper.common.extract_data import extract_all_data
+from endole_scraper.common.format_data import DataFrameFormatter
+from endole_scraper.tables import Endole
 
 log = logging.getLogger(__name__)
 
@@ -67,7 +69,7 @@ def extract_data_for_postcode(
         return None
 
 
-def process_postcode(outward_code: str, inward_codes: List[str]):
+def process_postcode(outward_code: str, inward_codes: List[str], database_path: str):
     """
     Processes a list of postcode values, extracts data for each unique postcode,
     and stores formatted data in a database.
@@ -82,7 +84,7 @@ def process_postcode(outward_code: str, inward_codes: List[str]):
     orb = OrbDriver()
     orb.set_user_agent()
 
-    endole = Endole()
+    endole = Endole(database_path=database_path)
     endole.create_table()
 
     postcodes = endole.execute_query(
@@ -112,7 +114,15 @@ def process_postcode(outward_code: str, inward_codes: List[str]):
             endole.ingest_dataframe(df=df_format)
 
 
-def main():
+@click.command(
+    help="Endole webscraper"
+)
+@click.option("--database-path", type=click.STRING, required=False)
+def main(database_path: Optional[str] = None):
+
+    if not database_path:
+        # Set database_path using an environment variable if available; otherwise, use REPO_PATH
+        database_path = os.getenv('DATABASE_PATH', REPO_PATH)
 
     with open('postcodes.json', 'r') as file:
         postcode_dict = json.load(file)
@@ -123,7 +133,9 @@ def main():
     # Create a ThreadPoolExecutor
     with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
         # Schedule the process_postcode function to run for each key in the postcode_dict
-        futures = {executor.submit(process_postcode, key, postcode_dict[key]): key for key in postcode_dict.keys()}
+        futures = {executor.submit(
+            process_postcode, key, postcode_dict[key], database_path
+        ): key for key in postcode_dict.keys()}
 
         # Optionally, retrieve and log results as tasks complete (useful for error handling)
         for future in concurrent.futures.as_completed(futures):

@@ -1,23 +1,19 @@
-import orb.spinner.utils as orb_utils
-
 import io
 import logging
-import time
 import random
-import pandas as pd
+import time
 from typing import List
 
+import orb.spinner.utils as orb_utils
+import pandas as pd
 from bs4 import BeautifulSoup
 from orb.scraper.utils import spoof_request
-
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
-
-from selenium.webdriver.remote.webelement import WebElement
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.chrome.webdriver import WebDriver
-
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as ec
+from selenium.webdriver.support.ui import WebDriverWait
 
 log = logging.getLogger(__name__)
 
