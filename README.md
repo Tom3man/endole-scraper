@@ -35,6 +35,26 @@ Before you can run the scraper, you need to set up your Python environment and i
       ```bash
       pip install -r requirements.txt
       ```
+## Configuration
+
+### Database Path
+
+The scraper requires a database path to store extracted data. There are several ways you can specify this path:
+
+*Command-Line Option*: You can directly pass the database path when you run the scraper using the --database-path option:
+
+```python
+poetry run python run.py --database-path /path/to/your/database
+```
+
+*Environment Variable*: If the --database-path option is not used, the scraper will look for an environment variable named DATABASE_PATH. You can set this variable in your shell or include it in a startup script:
+
+```bash
+export DATABASE_PATH=/path/to/your/database
+```
+
+*Default Repository Path*: If neither the command-line option nor the environment variable is set, the scraper defaults to using a path relative to the repository (REPO_PATH). This ensures that the scraper has a fallback location to store the database.
+
 
 ## Usage
 
@@ -44,6 +64,12 @@ To start the scraper, ensure that you have the `postcodes.json` file in your pro
 
 ```python
 poetry run python run.py
+```
+
+Optionally, you can specify the database path as mentioned above:
+
+```python
+poetry run python run.py --database-path /path/to/your/database
 ```
 
 ## Understanding the Output
