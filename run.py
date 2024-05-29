@@ -69,7 +69,7 @@ def extract_data_for_postcode(
         return None
 
 
-def process_postcode(outward_code: str, inward_codes: List[str], database_path: str):
+def process_postcode(outward_code: str, inward_codes: List[str], orb: OrbDriver, endole: Endole):
     """
     Processes a list of postcode values, extracts data for each unique postcode,
     and stores formatted data in a database.
@@ -81,14 +81,7 @@ def process_postcode(outward_code: str, inward_codes: List[str], database_path: 
         key (str): The key prefix to append to each value in the postcode list.
         values (list): A list of postcode suffixes to process.
     """
-    orb = OrbDriver()
     orb.set_user_agent()
-
-    endole = Endole(database_path=database_path)
-    endole.create_table()
-
-    postcodes = endole.execute_query(
-        f"SELECT DISTINCT POSTCODE FROM {endole.DEFAULT_PATH}").values
 
     driver = orb.get_webdriver()
 
@@ -97,9 +90,6 @@ def process_postcode(outward_code: str, inward_codes: List[str], database_path: 
         desc=f"Processing {len(inward_codes)} postcodes for outward code {outward_code}"
     ):
         postcode = f"{outward_code}-{inward_code}".upper()
-        if postcode in postcodes:
-            log.info(f"Data for postcode {postcode} already exists! Skipping.")
-            continue
 
         log.info(f"Extracting data for postcode {postcode}.")
         manage_browser_settings(driver=driver, orb=orb)
@@ -124,26 +114,48 @@ def main(database_path: Optional[str] = None):
         # Set database_path using an environment variable if available; otherwise, use REPO_PATH
         database_path = f"{os.getenv('DATABASE_PATH', REPO_PATH)}/endole"
 
+    endole = Endole(database_path=database_path)
+    endole.create_table()
+
+    orb = OrbDriver()
+
     with open('postcodes.json', 'r') as file:
         postcode_dict = json.load(file)
 
+    postcodes = endole.execute_query(
+        f"SELECT DISTINCT POSTCODE FROM {endole.DEFAULT_PATH}").values.flatten()
+    postcodes_set = set(postcodes)
+
     # Determine how many threads you want to use
-    num_threads = 5
+    num_threads = round(os.cpu_count() * 0.50)
 
-    # Create a ThreadPoolExecutor
-    with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
-        # Schedule the process_postcode function to run for each key in the postcode_dict
-        futures = {executor.submit(
-            process_postcode, key, postcode_dict[key], database_path
-        ): key for key in postcode_dict.keys()}
+    for outward_code, inward_codes in postcode_dict.items():
 
-        # Optionally, retrieve and log results as tasks complete (useful for error handling)
-        for future in concurrent.futures.as_completed(futures):
-            key = futures[future]
-            try:
-                future.result()  # If needed, you can handle results or exceptions here
-            except Exception as exc:
-                log.error(f'{key} generated an exception: {exc}')
+        inward_codes = [i for i in inward_codes if f"{outward_code}-{i}".upper() not in postcodes_set]
+        if len(inward_codes) == 0:
+            continue
+
+        process_postcode(
+            outward_code=outward_code,
+            inward_codes=inward_codes,
+            orb=orb,
+            endole=endole,
+        )
+
+    # # Create a ThreadPoolExecutor
+    # with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+    #     # Schedule the process_postcode function to run for each key in the postcode_dict
+    #     futures = {executor.submit(
+    #         process_postcode, key, postcode_dict[key], database_path
+    #     ): key for key in postcode_dict.keys()}
+
+    #     # Optionally, retrieve and log results as tasks complete (useful for error handling)
+    #     for future in concurrent.futures.as_completed(futures):
+    #         key = futures[future]
+    #         try:
+    #             future.result()  # If needed, you can handle results or exceptions here
+    #         except Exception as exc:
+    #             log.error(f'{key} generated an exception: {exc}')
 
 
 if __name__ == "__main__":
