@@ -243,6 +243,8 @@ def extract_all_data(driver: WebDriver) -> pd.DataFrame:
     # Change the viewport size to emulate different devices
     orb_utils.change_viewport_size(driver=driver)
     company_count = get_company_count(driver=driver)
+    if company_count == 0:
+        return None
 
     # Refresh the driver to ensure it's up-to-date
     driver.refresh()
