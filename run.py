@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import random
+import time
 from threading import Lock
 from typing import List, Optional, Union
 
@@ -14,7 +15,8 @@ from selenium.webdriver.chrome.webdriver import WebDriver
 from tqdm import tqdm
 
 from endole_scraper import REPO_PATH
-from endole_scraper.common.extract_data import extract_all_data
+from endole_scraper.common.extract_data import (extract_all_data,
+                                                get_company_count)
 from endole_scraper.common.format_data import DataFrameFormatter
 from endole_scraper.tables import Endole
 
@@ -26,7 +28,7 @@ BASE_URL = 'https://suite.endole.co.uk/explorer/postcode'
 ip_change_lock = Lock()
 
 
-def manage_browser_settings(driver: WebDriver, orb: OrbDriver):
+def manage_browser_settings(driver: WebDriver, orb: OrbDriver) -> WebDriver:
     """
     Randomly changes browser settings to mimic human behavior and avoid detection.
 
@@ -35,20 +37,25 @@ def manage_browser_settings(driver: WebDriver, orb: OrbDriver):
         orb (OrbDriver): Custom driver class instance used to manage settings.
     """
     if random.randint(1, 3) == 2:
+        log.info("Changing viewport size")
         orb_utils.change_viewport_size(driver=driver)
 
-    if random.randint(1, 10) == 5:
+    if random.randint(1, 10) == 10:
         with ip_change_lock:
+            log.info("Changing VPN")
             orb.change_ip_address()
+            time.sleep(7)
 
-    if random.randint(1, 10) == 5:
+    if random.randint(1, 10) == 8:
+        log.info("Refreshing Driver")
         driver.close()
         orb.set_user_agent()
         driver = orb.get_webdriver()
 
+    return driver
 
-def extract_data_for_postcode(
-        driver: WebDriver, postcode: str) -> Union[pd.DataFrame, None]:
+
+def extract_data_for_postcode(driver: WebDriver, postcode: str) -> Union[pd.DataFrame, None]:
     """
     Attempts to extract data for a given postcode using a WebDriver.
 
@@ -59,17 +66,23 @@ def extract_data_for_postcode(
     Returns:
         pd.DataFrame: Extracted data formatted as a DataFrame, or None if extraction fails.
     """
+
     url = f"{BASE_URL}/{postcode}".lower()
+    company_count = get_company_count(url=url)
+
+    if company_count == 0:
+        return None
+
     driver.get(url=url)
 
     try:
-        return extract_all_data(driver=driver)
+        return extract_all_data(driver=driver, company_count=company_count)
     except Exception as e:
         log.error(f"Error extracting {postcode}: {e}")
         return None
 
 
-def process_postcode(outward_code: str, inward_codes: List[str], orb: OrbDriver, endole: Endole):
+def process_postcode(outward_code: str, inward_codes: List[str], endole: Endole):
     """
     Processes a list of postcode values, extracts data for each unique postcode,
     and stores formatted data in a database.
@@ -81,6 +94,7 @@ def process_postcode(outward_code: str, inward_codes: List[str], orb: OrbDriver,
         key (str): The key prefix to append to each value in the postcode list.
         values (list): A list of postcode suffixes to process.
     """
+    orb = OrbDriver()
     orb.set_user_agent()
 
     driver = orb.get_webdriver()
@@ -92,7 +106,7 @@ def process_postcode(outward_code: str, inward_codes: List[str], orb: OrbDriver,
         postcode = f"{outward_code}-{inward_code}".upper()
 
         log.info(f"Extracting data for postcode {postcode}.")
-        manage_browser_settings(driver=driver, orb=orb)
+        driver = manage_browser_settings(driver=driver, orb=orb)
 
         df = extract_data_for_postcode(driver=driver, postcode=postcode)
         if df is not None:
@@ -117,8 +131,6 @@ def main(database_path: Optional[str] = None):
     endole = Endole(database_path=database_path)
     endole.create_table()
 
-    orb = OrbDriver()
-
     with open('postcodes.json', 'r') as file:
         postcode_dict = json.load(file)
 
@@ -127,10 +139,17 @@ def main(database_path: Optional[str] = None):
     postcodes_set = set(postcodes)
 
     # Determine how many threads you want to use
-    num_threads = round(os.cpu_count() * 0.50)
+    # num_threads = round(os.cpu_count() * 0.50)
 
-    for outward_code, inward_codes in postcode_dict.items():
+    # Randomly shuffle the keys (outward codes) in the dictionary to get a list
+    outward_codes = list(postcode_dict.keys())
+    random.shuffle(outward_codes)
 
+    for outward_code in outward_codes:
+
+        inward_codes = postcode_dict[outward_code]
+
+        # Check to ensure this postcode hasn't already been extracted
         inward_codes = [i for i in inward_codes if f"{outward_code}-{i}".upper() not in postcodes_set]
         if len(inward_codes) == 0:
             continue
@@ -138,7 +157,6 @@ def main(database_path: Optional[str] = None):
         process_postcode(
             outward_code=outward_code,
             inward_codes=inward_codes,
-            orb=orb,
             endole=endole,
         )
 

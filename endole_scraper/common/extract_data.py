@@ -8,7 +8,8 @@ import orb.spinner.utils as orb_utils
 import pandas as pd
 from bs4 import BeautifulSoup
 from orb.scraper.utils import spoof_request
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.common.exceptions import (StaleElementReferenceException,
+                                        TimeoutException)
 from selenium.webdriver.chrome.webdriver import WebDriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
@@ -18,15 +19,30 @@ from selenium.webdriver.support.ui import WebDriverWait
 log = logging.getLogger(__name__)
 
 
-def get_company_count(driver: WebDriver) -> int:
+def find_element_with_retry(driver, locator, retries=3):
+    for attempt in range(retries):
+        try:
+            element = WebDriverWait(driver, 10).until(
+                ec.presence_of_element_located(locator)
+            )
+            return element
+        except StaleElementReferenceException:
+            if attempt < retries - 1:
+                continue
+            else:
+                raise
+
+
+def get_company_count(url: str) -> int:
     """
     Extracts the number of companies listed on a webpage from a specified element.
 
-    This function finds an element by its class name that contains a header with the company count,
-    extracts the text, and parses it to retrieve an integer count of companies.
+    This function fetches the webpage at the provided URL, finds an element by its class name
+    that contains a header with the company count, extracts the text, and parses it to retrieve
+    an integer count of companies.
 
     Parameters:
-        driver (WebDriver): The Selenium WebDriver used to interact with the webpage.
+        url (str): The URL of the webpage from which to extract the company count.
 
     Returns:
         int: The number of companies extracted from the page.
@@ -34,19 +50,29 @@ def get_company_count(driver: WebDriver) -> int:
     Raises:
         ValueError: If the required elements are not found or do not contain the expected text format.
     """
-    try:
-        # Locate the header element that contains the company count
-        elements = driver.find_element(By.CLASS_NAME, "explorer-header")
-        company_header = elements.find_element(By.TAG_NAME, "h2")
-    except NoSuchElementException:
-        raise ValueError("Required header or sub-header element containing company count not found.")
+    # Fetch the webpage content
+    response = spoof_request(url=url, use_proxies=False)
+    if response.status_code != 200:
+        raise ValueError("Failed to retrieve content from URL")
+
+    soup = BeautifulSoup(response.content, 'html.parser')
+
+    # Locate the header element that contains the company count
+    elements = soup.find(class_='explorer-header')
+    if elements is None:
+        raise ValueError("Header element containing company count not found.")
+
+    # Find the 'h2' tag within the 'explorer-header' element
+    company_header = elements.find('h2')
+    if company_header is None:
+        raise ValueError("Sub-header element containing company count not found.")
 
     # Extract the number from the header text, assuming the format '123 Companies'
     try:
         company_count_text = company_header.text
-        company_count = int(company_count_text[:company_count_text.find('Companies')].strip())
-    except (ValueError, AttributeError) as e:
-        raise ValueError(f"Failed to parse company count from header text: {e}")
+        company_count = int(company_count_text.split(' ')[0])
+    except ValueError:
+        raise ValueError("Failed to parse company count from header text.")
 
     return company_count
 
@@ -70,8 +96,8 @@ def expand_all_columns(driver: WebDriver):
     # Click the show columns button twice to ensure expansion
     for _ in range(2):
         try:
-            element = WebDriverWait(driver, 2).until(
-                ec.visibility_of_element_located((By.CLASS_NAME, "show-columns-button"))
+            element = find_element_with_retry(
+                driver=driver, locator=(By.CLASS_NAME, "show-columns-button")
             )
             time.sleep(random.uniform(0.01, 0.05))
             orb_utils.human_clicking(driver=driver, target_element=element)
@@ -214,9 +240,10 @@ def change_order_of_column(driver: WebDriver, filter_no: int, order: bool):
 
     # Wait for the order menu to be visible and obtain the order links
     try:
-        order_menu = WebDriverWait(driver, 2).until(
-            ec.visibility_of_element_located((By.ID, "column_menu"))
+        order_menu = find_element_with_retry(
+            driver=driver, locator=(By.ID, "column_menu")
         )
+
         order_buttons = order_menu.find_elements(By.TAG_NAME, "a")
     except TimeoutException:
         raise TimeoutException("Order menu was not found within the timeout period.")
@@ -229,12 +256,13 @@ def change_order_of_column(driver: WebDriver, filter_no: int, order: bool):
     order_buttons[int(order)].click()
 
 
-def extract_all_data(driver: WebDriver) -> pd.DataFrame:
+def extract_all_data(driver: WebDriver, company_count: int) -> pd.DataFrame:
     """
     Extract data iteratively from a dynamic table using Selenium, showing progress with tqdm.
 
     Parameters:
         driver (WebDriver): The Selenium WebDriver object.
+        company_count (int): Count of the companies at that postcode (url).
 
     Returns:
         pd.DataFrame: A DataFrame containing all extracted data.
@@ -242,21 +270,18 @@ def extract_all_data(driver: WebDriver) -> pd.DataFrame:
 
     # Change the viewport size to emulate different devices
     orb_utils.change_viewport_size(driver=driver)
-    company_count = get_company_count(driver=driver)
-    if company_count == 0:
-        return None
 
-    # Refresh the driver to ensure it's up-to-date
-    driver.refresh()
     expand_all_columns(driver=driver)
 
-    driver.refresh()
+    # Extract the current page table
+    full_df = extract_page_table(driver=driver)
+
+    if len(full_df) == company_count:
+        return full_df
+
     drop_down_buttons = obtain_drop_down_buttons(driver=driver)
 
-    driver.refresh()
-    full_df = pd.DataFrame()
     cycles = 0
-
     for index, _ in enumerate(drop_down_buttons):
         # Two iterations: True and False
         for order in [True, False]:
@@ -272,12 +297,8 @@ def extract_all_data(driver: WebDriver) -> pd.DataFrame:
             # Extract the current page table
             df_cycle = extract_page_table(driver=driver)
 
-            # Concatenate new data to full DataFrame and remove duplicates
-            if full_df.empty:
-                full_df = df_cycle
-            else:
-                full_df = pd.concat([full_df, df_cycle]).drop_duplicates(
-                    subset=['Company']).reset_index(drop=True)
+            full_df = pd.concat([full_df, df_cycle]).drop_duplicates(
+                subset=['Company']).reset_index(drop=True)
 
             cycles += 1
 
