@@ -2,7 +2,6 @@ import concurrent.futures
 import json
 import os
 import random
-import time
 from itertools import islice
 from threading import Lock
 from typing import Optional, Union
@@ -10,6 +9,7 @@ from typing import Optional, Union
 import click
 import orb.spinner.utils as orb_utils
 import pandas as pd
+from orb.common.vpn import PiaVpn
 from orb.spinner.core.driver import OrbDriver
 from selenium.webdriver.chrome.webdriver import WebDriver
 
@@ -33,19 +33,15 @@ def manage_browser_settings(driver: WebDriver, orb: OrbDriver) -> WebDriver:
         orb (OrbDriver): Custom driver class instance used to manage settings.
     """
     if random.randint(1, 3) == 2:
-        log.info("Changing viewport size")
         orb_utils.change_viewport_size(driver=driver)
 
-    if random.randint(1, 50) == 10:
+    if random.randint(1, 40) == 2:
         with ip_change_lock:
-            log.info("Changing VPN")
-            orb.change_ip_address()
-            time.sleep(7)
+            PiaVpn().rotate_vpn()
+            driver = orb.refresh_driver()
 
-    if random.randint(1, 25) == 8:
-        log.info("Refreshing Driver")
-        driver.close()
-        driver = orb.get_webdriver()
+    if random.randint(1, 20) == 2:
+        driver = orb.refresh_driver()
 
     return driver
 

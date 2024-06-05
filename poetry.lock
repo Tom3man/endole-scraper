@@ -630,7 +630,7 @@ webdriver-manager = "^4.0.1"
 type = "git"
 url = "https://github.com/Tom3man/orb-weaver.git"
 reference = "HEAD"
-resolved_reference = "c2e6489097d3ad6681c354e386c6406bd9dd9bb4"
+resolved_reference = "b920d4b1d07d6a8c6adb99246d63faeb88ec8b00"
 
 [[package]]
 name = "outcome"
