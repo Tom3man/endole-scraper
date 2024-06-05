@@ -214,7 +214,7 @@ def obtain_drop_down_buttons(driver: WebDriver) -> List[WebElement]:
     return drop_down_filters
 
 
-def change_order_of_column(driver: WebDriver, filter_no: int, order: bool):
+def change_order_of_column(driver: WebDriver, filter_no: int, order: bool, drop_down_buttons: List[WebElement]):
     """
     Clicks on a dropdown menu to change the order of columns in a web table.
 
@@ -233,8 +233,8 @@ def change_order_of_column(driver: WebDriver, filter_no: int, order: bool):
     Raises:
         TimeoutException: If the dropdown or order buttons are not found within the specified time.
     """
-    # Obtain dropdown buttons
-    drop_down_buttons = obtain_drop_down_buttons(driver=driver)
+    # # Obtain dropdown buttons
+    # drop_down_buttons = obtain_drop_down_buttons(driver=driver)
     # Click the specified dropdown button
     drop_down_buttons[filter_no].click()
 
@@ -258,7 +258,7 @@ def change_order_of_column(driver: WebDriver, filter_no: int, order: bool):
 
 def extract_all_data(driver: WebDriver, company_count: int) -> pd.DataFrame:
     """
-    Extract data iteratively from a dynamic table using Selenium, showing progress with tqdm.
+    Extract data iteratively from a dynamic table using Selenium.
 
     Parameters:
         driver (WebDriver): The Selenium WebDriver object.
@@ -267,9 +267,6 @@ def extract_all_data(driver: WebDriver, company_count: int) -> pd.DataFrame:
     Returns:
         pd.DataFrame: A DataFrame containing all extracted data.
     """
-
-    # Change the viewport size to emulate different devices
-    orb_utils.change_viewport_size(driver=driver)
 
     expand_all_columns(driver=driver)
 
@@ -292,7 +289,10 @@ def extract_all_data(driver: WebDriver, company_count: int) -> pd.DataFrame:
             log.info(f"Cycle {cycles}: {len(full_df)}/{company_count} records extracted so far.")
 
             # Change the order of the columns based on the current cycle
-            change_order_of_column(driver=driver, filter_no=index, order=order)
+            change_order_of_column(
+                driver=driver, filter_no=index,
+                order=order, drop_down_buttons=drop_down_buttons
+            )
 
             # Extract the current page table
             df_cycle = extract_page_table(driver=driver)
