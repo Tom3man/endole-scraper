@@ -85,7 +85,7 @@ def extract_data_for_postcode(postcode: str) -> Union[pd.DataFrame, None]:
 
 
 def process_postcode(
-        outward_code: str, inward_code: str, endole: Endole
+    postcode: str, endole: Endole
 ):
     """
     Processes a list of postcode values, extracts data for each unique postcode,
@@ -97,7 +97,7 @@ def process_postcode(
         endole (Endole): An instance of the Endole class to interact with the database.
     """
 
-    postcode = f"{outward_code}-{inward_code}".upper()
+    postcode = postcode.upper()
 
     log.info(f"Extracting data for postcode {postcode}.")
 
@@ -114,8 +114,7 @@ def process_postcode(
     help="Endole webscraper"
 )
 @click.option("--database-path", type=click.STRING, required=False)
-@click.option("--no-outward-codes", type=click.INT, required=False)
-def main(database_path: Optional[str] = None, no_outward_codes: Optional[int] = None):
+def main(database_path: Optional[str] = None):
 
     if not database_path:
         # Set database_path using an environment variable if available; otherwise, use REPO_PATH
@@ -127,53 +126,30 @@ def main(database_path: Optional[str] = None, no_outward_codes: Optional[int] = 
     with open('postcodes.json', 'r') as file:
         postcode_dict = json.load(file)
 
+    postcode_list = []
+    for key in postcode_dict.keys():
+        for value in postcode_dict[key]:
+            postcode_list.append(f'{key}-{value}')
+
     postcodes = endole.execute_query(
         f"SELECT DISTINCT POSTCODE FROM {endole.DEFAULT_PATH}").values.flatten()
     postcodes_set = set(postcodes)
 
-    # Determine how many threads you want to use
-    num_threads = round(os.cpu_count() * 0.50)
+    to_scrape = [i for i in postcode_list if i.upper() not in postcodes_set]
 
-    # Randomly shuffle the keys (outward codes) in the dictionary to get a list
-    outward_codes = list(postcode_dict.keys())
-    random.shuffle(outward_codes)
+    max_workers = 1
 
-    if no_outward_codes:
-        outward_codes = outward_codes[:no_outward_codes]
-    for outward_code in outward_codes:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(process_postcode, postcode, endole)
+            for postcode in to_scrape
+        ]
 
-        # Check to ensure this postcode hasn't already been extracted
-        inward_codes = postcode_dict[outward_code]
-        inward_codes = [i for i in inward_codes if f"{outward_code}-{i}".upper() not in postcodes_set]
-
-        log.info(f"There are {len(inward_codes)} inward codes for outward code {outward_code}")
-        if len(inward_codes) == 0:
-            continue
-
-        chk_size = 25
-        lst_it = iter(inward_codes)
-        inward_chunks = list(iter(lambda: tuple(islice(lst_it, chk_size)), ()))
-
-        log.info(f"Splitting into {len(inward_chunks)} chunks each roughly of size {len(inward_chunks[0])}")
-
-        for inward_codes_chunked in inward_chunks:
-
-            # Create a ThreadPoolExecutor
-            with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
-                # Schedule the process_postcode function to run for each key in the postcode_dict
-
-                futures = {
-                    executor.submit(
-                        process_postcode, outward_code, inward_code, endole
-                    ): f"{outward_code}-{inward_code}" for inward_code in inward_codes_chunked
-                }
-
-                for future in concurrent.futures.as_completed(futures):
-                    key = futures[future]
-                    try:
-                        future.result()  # If needed, you can handle results or exceptions here
-                    except Exception as exc:
-                        log.error(f'{key} generated an exception: {exc}')
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                future.result()
+            except Exception as e:
+                log.error(f"An error occurred: {e}")
 
 
 if __name__ == "__main__":

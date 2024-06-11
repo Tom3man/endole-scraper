@@ -1,13 +1,15 @@
 import io
+import itertools
 import logging
 import random
 import time
-from typing import List
+from typing import List, Optional
 
 import orb.spinner.utils as orb_utils
 import pandas as pd
 from bs4 import BeautifulSoup
 from orb.scraper.utils import spoof_request
+from orb.spinner.core.driver import OrbDriver
 from selenium.common.exceptions import (StaleElementReferenceException,
                                         TimeoutException)
 from selenium.webdriver.chrome.webdriver import WebDriver
@@ -15,6 +17,9 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.support.ui import WebDriverWait
+
+from endole_scraper.common.format_data import DataFrameFormatter
+from endole_scraper.utils.utils import manage_browser_settings
 
 log = logging.getLogger(__name__)
 
@@ -70,7 +75,11 @@ def get_company_count(url: str) -> int:
     # Extract the number from the header text, assuming the format '123 Companies'
     try:
         company_count_text = company_header.text
-        company_count = int(company_count_text.split(' ')[0])
+        company_count = int(
+            ''.join(
+                char for char in company_count_text.split(' ')[0] if char.isdigit()
+            )
+        )
     except ValueError:
         raise ValueError("Failed to parse company count from header text.")
 
@@ -256,50 +265,83 @@ def change_order_of_column(driver: WebDriver, filter_no: int, order: bool, drop_
     order_buttons[int(order)].click()
 
 
-def extract_all_data(driver: WebDriver, company_count: int) -> pd.DataFrame:
+def extract_all_data(
+        driver: WebDriver,
+        company_count: int,
+        cycle_stop: Optional[int] = 50
+) -> pd.DataFrame:
     """
     Extract data iteratively from a dynamic table using Selenium.
 
     Parameters:
         driver (WebDriver): The Selenium WebDriver object.
         company_count (int): Count of the companies at that postcode (url).
+        cycle_stop (Optional[int]): Number of cycles to stop after.
 
     Returns:
         pd.DataFrame: A DataFrame containing all extracted data.
     """
 
+    cycles = 1
+
     expand_all_columns(driver=driver)
 
     # Extract the current page table
     full_df = extract_page_table(driver=driver)
+    log.info(f"Cycle {cycles}: {len(full_df)}/{company_count} records extracted.")
 
     if len(full_df) == company_count:
-        return full_df
+        formatter = DataFrameFormatter(dataframe=full_df)
+        full_df_formatted = formatter.format_dataframe()
+        return full_df_formatted
 
+    driver.switch_to.default_content()
     drop_down_buttons = obtain_drop_down_buttons(driver=driver)
 
-    cycles = 0
-    for index, _ in enumerate(drop_down_buttons):
-        # Two iterations: True and False
-        for order in [True, False]:
-            if cycles == 10 or len(full_df) == company_count:
-                log.info(f"Terminating early after {cycles} cycles, extracted {len(full_df)}/{company_count} records.")
+    terminate = False
+
+    drop_down_buttons_enum = [i[0] for i in enumerate(drop_down_buttons)]
+    random.shuffle(drop_down_buttons_enum)
+    cycle_iterator = itertools.cycle(drop_down_buttons_enum)
+
+    while len(full_df) != company_count and cycles < cycle_stop:
+
+        for index in cycle_iterator:
+
+            # Two iterations: True and False
+            for order in [True, False]:
+                if len(full_df) == company_count or cycles >= cycle_stop:
+                    perc_records = round(len(full_df) * 100 / company_count, 2)
+                    log.info(f"Terminating after {cycles} cycles")
+                    log.info(f"Extracted {len(full_df)}/{company_count} records ({perc_records}%).")
+                    terminate = True
+                    break
+
+                # Change the order of the columns based on the current cycle
+                change_order_of_column(
+                    driver=driver, filter_no=index,
+                    order=order, drop_down_buttons=drop_down_buttons
+                )
+
+                # Extract the current page table
+                df_cycle = extract_page_table(driver=driver)
+
+                cycles += 1
+                log.info(f"Cycle {cycles}: {len(full_df)}/{company_count} records extracted.")
+
+                # Concat into existing dataframe avoiding duplicates
+                full_df = pd.concat([full_df, df_cycle]).drop_duplicates(
+                    subset=['Company']).reset_index(drop=True)
+
+                # Find the drop down buttons again to avoid stale elements
+                drop_down_buttons = obtain_drop_down_buttons(driver=driver)
+
+            if terminate:  # Check the flag after the inner loop
                 break
 
-            log.info(f"Cycle {cycles}: {len(full_df)}/{company_count} records extracted so far.")
+        if terminate:  # Check the flag after the outer loop
+            break
 
-            # Change the order of the columns based on the current cycle
-            change_order_of_column(
-                driver=driver, filter_no=index,
-                order=order, drop_down_buttons=drop_down_buttons
-            )
-
-            # Extract the current page table
-            df_cycle = extract_page_table(driver=driver)
-
-            full_df = pd.concat([full_df, df_cycle]).drop_duplicates(
-                subset=['Company']).reset_index(drop=True)
-
-            cycles += 1
-
-    return full_df
+    formatter = DataFrameFormatter(dataframe=full_df)
+    full_df_formatted = formatter.format_dataframe()
+    return full_df_formatted

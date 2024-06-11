@@ -1,15 +1,20 @@
 import json
+from typing import Optional
 
 import click
 
+from endole_scraper import REPO_PATH
 from endole_scraper.common.extract_postcodes import GetPostcodes
 
 
 @click.command(
     help="Endole Postcode Dictionary Builder"
 )
-@click.option("--file-path", type=click.STRING, required=True)
-def main(file_path: str):
+@click.option("--file-path", type=click.STRING, required=False)
+def main(file_path: Optional[str]):
+
+    if not file_path:
+        file_path = REPO_PATH
 
     extract_postcodes = GetPostcodes()
 

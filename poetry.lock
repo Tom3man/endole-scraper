@@ -1122,7 +1122,7 @@ files = [
 
 [[package]]
 name = "sqlite-forge"
-version = "0.1.0"
+version = "1.0.2"
 description = "Common tool for forging and maintaining sqlite databases"
 optional = false
 python-versions = "^3.12"
@@ -1136,7 +1136,7 @@ pandas = "^2.2.2"
 type = "git"
 url = "https://github.com/Tom3man/sqlite-forge.git"
 reference = "HEAD"
-resolved_reference = "4d10cb956104bf481686457c333d918d4fb17efe"
+resolved_reference = "a1ab9809a4c21e1549eae1dc571630153b3b787d"
 
 [[package]]
 name = "stack-data"

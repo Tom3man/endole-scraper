@@ -23,13 +23,10 @@ class DataFrameFormatter:
         """Format currency values."""
         multipliers = {'k': 1000, 'm': 1000000}
         if currency:
-            numerals = ''.join(
-                char for char in currency if char in '0123456789.-')
-            alpha_chars = ''.join(
-                char for char in currency if char in string.ascii_letters)
+            numerals = ''.join(char for char in currency if char in '0123456789.-')
+            alpha_chars = ''.join(char for char in currency if char in string.ascii_letters)
             if alpha_chars:
-                numerals = float(numerals) * int(
-                    multipliers[alpha_chars.strip()])
+                numerals = float(numerals) * multipliers.get(alpha_chars.strip(), 1)
             return int(numerals)
         else:
             return currency
@@ -60,10 +57,22 @@ class DataFrameFormatter:
                 return round(float(numerals) / 100, 4)
         return perc_str
 
+    @staticmethod
+    def get_postcode(address: str) -> str:
+        """Get postal code from the address column"""
+
+        i = address.split(' ')
+        postcode = f"{i[-2]}-{i[-1]}".upper()
+
+        return postcode
+
     def format_dataframe(self) -> pd.DataFrame:
         """Format the entire DataFrame."""
 
         self.dataframe.drop(columns=['Telephone'], inplace=True)
+
+        self.dataframe['POSTCODE'] = self.dataframe['Address'].apply(
+            lambda x: self.get_postcode(x))
 
         columns_mapping = {
             'Company': 'COMPANY',
