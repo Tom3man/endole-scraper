@@ -69,7 +69,7 @@ class DataFrameFormatter:
     def format_dataframe(self) -> pd.DataFrame:
         """Format the entire DataFrame."""
 
-        self.dataframe.drop(columns=['Telephone'], inplace=True)
+        # self.dataframe.drop(columns=['Telephone'], inplace=True)
 
         self.dataframe['POSTCODE'] = self.dataframe['Address'].apply(
             lambda x: self.get_postcode(x))

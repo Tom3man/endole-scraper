@@ -2,7 +2,6 @@ import concurrent.futures
 import json
 import os
 import random
-from itertools import islice
 from threading import Lock
 from typing import Optional, Union
 
@@ -123,7 +122,7 @@ def main(database_path: Optional[str] = None):
     endole = Endole(database_path=database_path)
     endole.create_table()
 
-    with open('postcodes.json', 'r') as file:
+    with open(f'{REPO_PATH}/postcodes.json', 'r') as file:
         postcode_dict = json.load(file)
 
     postcode_list = []

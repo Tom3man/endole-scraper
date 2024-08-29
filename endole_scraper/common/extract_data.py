@@ -9,7 +9,6 @@ import orb.spinner.utils as orb_utils
 import pandas as pd
 from bs4 import BeautifulSoup
 from orb.scraper.utils import spoof_request
-from orb.spinner.core.driver import OrbDriver
 from selenium.common.exceptions import (StaleElementReferenceException,
                                         TimeoutException)
 from selenium.webdriver.chrome.webdriver import WebDriver
@@ -19,7 +18,6 @@ from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.support.ui import WebDriverWait
 
 from endole_scraper.common.format_data import DataFrameFormatter
-from endole_scraper.utils.utils import manage_browser_settings
 
 log = logging.getLogger(__name__)
 
